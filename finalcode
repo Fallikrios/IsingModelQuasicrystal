@@ -1,0 +1,350 @@
+import numpy as np
+import numpy.ma as ma
+import matplotlib.pyplot as plt
+import math
+from math import *
+import numba
+import matplotlib.pyplot as plt
+from numba import jit
+print("Numba Version : {}".format(numba.__version__))
+
+phi = (sqrt(5.)+1.)/2. #Golden Ratio -- scale factor for inflation
+psi = 1./phi #Inverse of Golden Ratio
+triangles = []
+a1 = phi/(psi + 1.) #scale factor triangle 1 and scale factor 1 triangle 2
+a2 = phi**2./((phi + 1.)) #scale factor 2 triangle 2
+n = 16 # decimal points for rounding
+m = 10 #decimal points for rounding initial
+
+class Triangle:
+    def __init__(self, coordinates, t_type):
+        self.coordinates = coordinates #coordinates will always be saved 1. node with angle 2.left arm 3.right arm (pov point with angle)
+        self.t_type = t_type # triangle 1: 36deg t_type = (0,1) (chirality); triangle 2: 108deg t_type = (2,3) (chirality)
+
+
+#initializing 10 triangles type 1 in a circle 
+for i in range(10):
+    triangles.append(Triangle([[0,0],[round(sin(i*pi*0.2),m),round(cos(i*pi*0.2),m)],[round(sin((i+1)*pi*0.2),m),round(cos((i+1)*pi*0.2),m)]],(1+(-1)**i)/2))
+   
+    
+#split and scale for t_type 0 (triangle 1)
+def split_and_scale0(Triangle0):
+    #triangle 0 is split into one triangle 2 and one triangle 0. The right arm is split
+    #coordinates2 = a1*AB, phi B, phi C
+    AB = [round(a1*(Triangle0.coordinates[2][0]-Triangle0.coordinates[0][0])+phi*Triangle0.coordinates[0][0],n),round(a1*(Triangle0.coordinates[2][1]-Triangle0.coordinates[0][1])+phi*Triangle0.coordinates[0][1],n)]
+    B = [round(phi*Triangle0.coordinates[0][0],n),round(phi*Triangle0.coordinates[0][1],n)]
+    C = [round(phi*Triangle0.coordinates[1][0],n),round(phi*Triangle0.coordinates[1][1],n)]
+    A = [round(phi*Triangle0.coordinates[2][0],n),round(phi*Triangle0.coordinates[2][1],n)]
+    coordinates2 = [AB,B,C]
+    triangle2 = Triangle(coordinates2, 2)
+    
+    #coordinates0 = phi C, phi A, a1*AB
+    coordinates0 = [C,A,AB]
+    triangle0 = Triangle(coordinates0, 0)
+    return triangle0, triangle2
+
+#split and scale for t_type 1 (triangle 1)
+def split_and_scale1(Triangle1):
+    #triangle 1 is split into one triangle 3 and one triangle 1. The left arm is split
+    #coordinates3 = a1*CB, phi A, phi B
+    CB =[round(a1*(Triangle1.coordinates[1][0]-Triangle1.coordinates[0][0])+phi*Triangle1.coordinates[0][0],n),round(a1*(Triangle1.coordinates[1][1]-Triangle1.coordinates[0][1])+phi*Triangle1.coordinates[0][1],n)]
+    A = [round(phi*Triangle1.coordinates[2][0],n),round(phi*Triangle1.coordinates[2][1],n)]
+    B = [round(phi*Triangle1.coordinates[0][0],n),round(phi*Triangle1.coordinates[0][1],n)]
+    C = [round(phi*Triangle1.coordinates[1][0],n),round(phi*Triangle1.coordinates[1][1],n)]
+    coordinates3 = [CB,A,B]
+    triangle3 = Triangle(coordinates3, 3)
+    
+    #coordinates1 = phi A, a1*CB, phi C
+    coordinates1 = [A,CB,C]
+    triangle1 = Triangle(coordinates1, 1)
+    return triangle1, triangle3
+
+def split_and_scale2(Triangle2):
+    #triangle 2 is split into one triangle 2, one triangle 3 and one triangle 1. The right arm is split
+    #coordinates3 = a1*BC+phi*C, phi C, a2*AC+phi*C
+    BC = [round(a1*(Triangle2.coordinates[0][0]-Triangle2.coordinates[1][0])+phi*Triangle2.coordinates[1][0],n),round(a1*(Triangle2.coordinates[0][1]-Triangle2.coordinates[1][1])+phi*Triangle2.coordinates[1][1],n)]
+    C = [round(phi*Triangle2.coordinates[1][0],n),round(phi*Triangle2.coordinates[1][1],n)]
+    AC = [round(a2*(Triangle2.coordinates[2][0]-Triangle2.coordinates[1][0])+phi*Triangle2.coordinates[1][0],n),round(a2*(Triangle2.coordinates[2][1]-Triangle2.coordinates[1][1])+phi*Triangle2.coordinates[1][1],n)]
+    A = [round(phi*Triangle2.coordinates[2][0],n),round(phi*Triangle2.coordinates[2][1],n)]
+    B = [round(phi*Triangle2.coordinates[0][0],n),round(phi*Triangle2.coordinates[0][1],n)]
+    coordinates3 = [BC,C,AC]
+    triangle3 = Triangle(coordinates3, 3)
+    
+    #coordinates2 = a2 AC + phi C, phi A, phi B
+    coordinates2 = [AC,A,B]
+    triangle2 = Triangle(coordinates2, 2)
+    
+    #coordinates1 = a2 AC + phi C, phi B, a1 BC + phi C
+    coordinates1 = [AC,B,BC]
+    triangle1 = Triangle(coordinates1, 1)
+    return triangle1, triangle2, triangle3
+
+def split_and_scale3(Triangle3):
+    #triangle 3 is split into one triangle 3, one triangle 0 and one triangle 2. The left arm is split
+    #coordinates3 = a1 AB + phi A, a2 AC + phi A, phi A
+    AB = [round(a1*(Triangle3.coordinates[0][0]-Triangle3.coordinates[2][0])+phi*Triangle3.coordinates[2][0],n),round(a1*(Triangle3.coordinates[0][1]-Triangle3.coordinates[2][1])+phi*Triangle3.coordinates[2][1],n)]
+    AC = [round(a2*(Triangle3.coordinates[1][0]-Triangle3.coordinates[2][0])+phi*Triangle3.coordinates[2][0],n),round(a2*(Triangle3.coordinates[1][1]-Triangle3.coordinates[2][1])+phi*Triangle3.coordinates[2][1],n)]
+    A = [round(phi*Triangle3.coordinates[2][0],n),round(phi*Triangle3.coordinates[2][1],n)]
+    B = [round(phi*Triangle3.coordinates[0][0],n),round(phi*Triangle3.coordinates[0][1],n)]
+    coordinates3 =[AB,AC,A]
+    C = [round(phi*Triangle3.coordinates[1][0],n),round(phi*Triangle3.coordinates[1][1],n)]
+    triangle3 = Triangle(coordinates3, 3)
+    
+    #coordinates0 = a2 AC + phi A, a1 AB + phi A, phi B
+    coordinates0 = [AC,AB,B]
+    triangle0 = Triangle(coordinates0, 0)
+    
+    #coordinates2 = a2 AC + phi A, phi B, phi C
+    coordinates2 = [AC,B,C]
+    triangle2 = Triangle(coordinates2, 2)
+    
+    return triangle0, triangle2, triangle3
+    
+#change iterations here
+for j in range(4):
+    triangles2 = []
+    for i in triangles:
+        if i.t_type == 0:
+            a, b = split_and_scale0(i)
+            triangles2.append(a)
+            triangles2.append(b)
+            
+        elif i.t_type == 1:
+            a, b = split_and_scale1(i)
+            triangles2.append(a)
+            triangles2.append(b)
+            
+        elif i.t_type == 2:
+            a, b, c = split_and_scale2(i)
+            triangles2.append(a)
+            triangles2.append(b)
+            triangles2.append(c)
+           
+        elif i.t_type == 3:
+            a, b, c = split_and_scale3(i)
+            triangles2.append(a)
+            triangles2.append(b)
+            triangles2.append(c)
+        
+        else:
+            print(i.t_type)
+        triangles = triangles2
+points = []
+redundancy = 0
+test = 0
+for i in triangles:
+    if i.coordinates[0] not in points:
+        for j in points:
+            if (j[0]-i.coordinates[0][0])**2 + (j[1]-i.coordinates[0][1])**2 < psi/3:
+                test += 1
+        if test > 0:
+            redundancy += 1
+            test = 0
+        elif test == 0:
+            points.append(i.coordinates[0])
+    else:
+        redundancy += 1
+    if i.coordinates[1] not in points:
+        for j in points:
+            if (j[0]-i.coordinates[1][0])**2 + (j[1]-i.coordinates[1][1])**2 < psi/3:
+                test += 1
+        if test > 0:
+            redundancy += 1
+            test = 0
+        elif test == 0:
+            points.append(i.coordinates[1])
+    else:
+        redundancy += 1
+    if i.coordinates[2] not in points:
+        for j in points:
+            if (j[0]-i.coordinates[2][0])**2 + (j[1]-i.coordinates[2][1])**2 < psi/3:
+                test += 1
+        if test > 0:
+            redundancy += 1
+            test = 0
+        elif test == 0:
+            points.append(i.coordinates[2])
+    else:
+        redundancy += 1           
+
+triangless = []         
+for i in triangles:
+    triangless.append(i.coordinates[0])
+    triangless.append(i.coordinates[1])
+    triangless.append(i.coordinates[2])
+triangles3a = np.array(triangless)
+
+
+
+x, y = triangles3a.T
+fig, ax = plt.subplots()
+ax.set_aspect('equal')
+
+ax.scatter(x, y, s=2, marker='.')
+
+plt.show()
+
+
+N = len(points) #size of lattice
+
+empty_coordinate_array = np.zeros(3)
+lattice = np.tile(empty_coordinate_array, [N,1])
+
+for n in range(N):
+  lattice[n][0] = points[n][0]
+  lattice[n][1] = points[n][1]
+
+#the block below gives 50% of each pair of coordinates respectively a positive (+1) spin or a negative spin (-1)
+random_array = np.random.random(N)
+
+for n in range(N):
+  if random_array[n]>0.5:
+    lattice[n][2] = 1
+  elif random_array[n]<=0.5:
+    lattice[n][2] = -1
+
+def distances(lattice, d_crit):
+  #let's calculate the distance between coordinate (x,y) to every other coordinate
+  maximumarraylength = 60
+  outer_distance_array = np.zeros(maximumarraylength)
+  for n in range(N):
+    inner_distance_array = np.array([], dtype = "float")
+    for m in range(N):
+      d = (lattice[m][0]-lattice[n][0])**2+(lattice[m][1]-lattice[n][1])**2
+      if d > 0 and d <= d_crit: #only distances shorter or equal to than sqrt(d_crit) are taken into account 
+      #e.g., for d_crit = 2, this means only distances of 1 and sqrt(2), since the next shortest distance would be 2
+        inner_distance_array = np.append(inner_distance_array, [float(m),d])
+    if len(inner_distance_array) < maximumarraylength:
+      diff = maximumarraylength-len(inner_distance_array)
+      z = np.zeros(diff, dtype="float")
+      inner_distance_array = np.append(inner_distance_array, z, axis=0)
+
+    outer_distance_array = np.vstack((outer_distance_array, inner_distance_array))
+  
+
+  outer_distance_array = np.delete(outer_distance_array, 0, axis=0)
+
+  return outer_distance_array
+
+square_distance_array = distances(lattice, 3.5) #change critical distance
+
+@jit
+def energy(lattice, d_crit):
+#enter the lattice you want the energy of and the maximum distance squared that you consider nearest neighbours
+  E_tot = 0 #energy starts at 0
+  square_distance_array = distances(lattice, d_crit) #create the square distance array
+  spin_n = 0
+  spin_m = 0
+  for n in range(N):
+    for m in range(8):
+      d = square_distance_array[n][2*m+1]
+      if d != 0:
+        spin_n = lattice[n][2]
+        spin_m = lattice[int(square_distance_array[n][2*m])][2]
+        E_tot += -(1/d)*(spin_n*spin_m)
+
+  return E_tot
+
+E_tot = energy(lattice, 3.5) #change critical distance
+
+@jit
+def ising(lattice, d_crit, runtime, BJ):
+  ###feed the function the lattice you want it to operate on,
+  #  the mamimum distance squared that you consider nearest neighbours 
+  #  the amount of timesteps that you want the algorithm to take,
+  #  and the total starting energy of the lattice
+
+  square_distance_array = distances(lattice, d_crit) #the distances between any two points will always stay the same, so just calculate it once and use that
+  E_tot = energy(lattice, d_crit) #starting energy of the lattice
+  spin_sum = np.zeros(runtime-1) #creates an empty array of length runtime that keeps track of how the sum of all spins in the lattice evolves over time
+  energy_tot = np.zeros(runtime-1) #creates an empty array of length runtime that keeps track of how the total energy of the lattice evolves over time
+  initial_lattice = lattice.copy() #make a copy of the lattice, so that we don't change the initial lattice
+
+  #let's pick a random coordinate in the lattice and flip its spin
+  for t in range(0,runtime-1):
+    n = np.random.randint(0,N-1)
+    d_array = square_distance_array[n] #d_array is a one-dimensional distance array containing the distance from point n to every other point as long as that distance is shorter or equal to d_crit
+    #it will at most have 8 non-zero entries for a square lattice
+    final_lattice = initial_lattice.copy()
+    final_lattice[n][2] = -1*initial_lattice[n][2] #this flips the spin of the randomly selected coordinate in the lattice
+
+    E_initial = 0
+    E_final = 0
+    for m in range(8):
+      d = d_array[2*m+1]
+      if d != 0: #only distances shorter or equal to than sqrt(d_crit) are taken into account 
+      #e.g., for d_crit = 2, this means only distances of 1 and sqrt(2), since the next shortest distance would be 2
+        initial_spin_n = initial_lattice[n][2]
+        initial_spin_m = initial_lattice[int(square_distance_array[n][2*m])][2]
+        E_initial += -(1/d)*(initial_spin_n*initial_spin_m)
+
+        final_spin_n = final_lattice[n][2]
+        final_spin_m = final_lattice[int(square_distance_array[n][2*m])][2]
+        E_final += -(1/d)*(final_spin_n*final_spin_m)
+
+    dE = E_final - E_initial #this is the difference in energy created by flipping a random spin
+    r = np.random.random() #random number between 0 and 1
+    p = np.exp(-BJ*dE) #transition probability to compare with r in elif statement
+    if dE<0:
+      initial_lattice = final_lattice
+      E_tot = energy(initial_lattice, d_crit)
+    elif dE>=0 and r<=p:
+      initial_lattice = final_lattice
+      E_tot = energy(initial_lattice, d_crit)
+    #else the spin of the chosen coordinate remains unflipped
+
+    spin_sum[t] = initial_lattice.sum(axis=0)[2] #sums up all the spins in the lattice and takes that as the t-th entry
+    energy_tot[t] = E_tot #takes the total energy of the new lattice as t-th entry
+
+  final_lattice = initial_lattice
+
+  return spin_sum, energy_tot, final_lattice
+
+BJ = 0.7
+spin_sum, energy_tot, new_lattice = ising(lattice, 3.5, 20000, BJ) #change critical distance
+
+fig, (ax1,ax2) = plt.subplots(1,2, figsize=(16,6))
+plt.subplots_adjust(wspace=0.3)
+ax1.ticklabel_format(axis="x", style="sci", scilimits=(0,0))
+ax1.set_title(r"Sum of all spins over time for $\beta J=${}".format(BJ))
+ax1.set_xlabel("t (runtime)")
+ax1.set_ylabel("Sum of all spins")
+ax1.grid()
+ax1.plot(spin_sum)
+
+ax2.ticklabel_format(axis="x", style="sci", scilimits=(0,0))
+ax2.set_title(r"Total energy over time for $\beta J=${}".format(BJ))
+ax2.set_xlabel("t (runtime)")
+ax2.set_ylabel(r"Energy $E/J$")
+ax2.grid()
+ax2.plot(energy_tot)
+
+@jit
+def ising_temp_range(lattice, d_crit, runtime, BJ_min, BJ_max, interval):
+  #BJ_min: minimum value for BJ --> maximum value for temperature
+  #BJ_max: maximum value for BJ --> minimum value for temperature
+  #interval: interval of values of BJ that we want to go through
+  BJ_range = np.arange(BJ_min, BJ_max, interval)
+  av_spin = np.zeros(len(BJ_range)) #create an empty array with length of the amount of values of BJ that we'll run through
+  
+  for count, bj in enumerate(BJ_range):
+    spin_sum, energy_tot, new_lattice = ising(lattice, d_crit, runtime, bj)
+    av_spin[count] = spin_sum[-100000:].mean()/N 
+    #we'll take the mean of the spin values long after it has reached equilibrium to take an average spin value at equilibrium
+    #/N**2 to get the average spin, since in a square lattice there are N**2 coordinates
+  return BJ_range, av_spin
+
+d_crit = 3.5
+runtime = 20000
+BJ_min = 0.1
+BJ_max = 1
+interval = 0.05
+BJ_range, av_spin = ising_temp_range(lattice, d_crit, runtime, BJ_min, BJ_max, interval)
+
+plt.figure(figsize=(7,5))
+plt.plot(1/(BJ_range), av_spin, '.--b')
+plt.title("Average spin of lattice at equilibrium over temperature", fontsize=16, fontweight=750, pad=30)
+plt.xlabel(r"$(\frac{k}{J})T$", fontsize=16)
+plt.ylabel("Average spin at equilibrium", fontsize=14)
+plt.legend()
+plt.grid()
